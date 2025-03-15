@@ -1,0 +1,294 @@
+P16 assembler v1.4.0 (Mar  6 2023)	c:\Users\Mihail\Downloads\4oTrabalho.lst	Fri Jun 09 14:11:57 2023
+
+Sections
+Index   Name            Address   Size
+0       startup         0000      000E 14
+1       .text           000E      00D6 214
+2       .bss            00E4      0002 2
+3       .stack          00E6      0040 64
+
+Symbols
+Name                    Type      Value       Section
+_start                  LABEL     0004 4      startup
+CPSR_BIT_I              ABSOLUTE  0010 16     startup
+inport_addr             LABEL     00B8 184    .text
+INPORT_ADDRESS          ABSOLUTE  FF80 65408  startup
+inport_read             LABEL     00B2 178    .text
+isr                     LABEL     0094 148    .text
+isr_addr                LABEL     000C 12     startup
+loop                    LABEL     0068 104    .text
+main                    LABEL     000E 14     .text
+main_addr               LABEL     000A 10     startup
+main_loop               LABEL     0010 16     .text
+main_loop2              LABEL     003A 58     .text
+outport_addr            LABEL     00C0 192    .text
+OUTPORT_ADDRESS         ABSOLUTE  FFC0 65472  startup
+OUTPORT_INIT_VAL        ABSOLUTE  0000 0      startup
+outport_write           LABEL     00BA 186    .text
+PTC_ADDR                LABEL     00E2 226    .text
+PTC_ADDRESS             ABSOLUTE  FF00 65280  startup
+PTC_CMD_START           ABSOLUTE  0000 0      startup
+PTC_CMD_STOP            ABSOLUTE  0001 1      startup
+ptc_init                LABEL     00D2 210    .text
+ptc_start               LABEL     00C2 194    .text
+ptc_stop                LABEL     00CA 202    .text
+PTC_TC                  ABSOLUTE  0004 4      startup
+PTC_TCR                 ABSOLUTE  0000 0      startup
+PTC_TIR                 ABSOLUTE  0006 6      startup
+PTC_TMR                 ABSOLUTE  0002 2      startup
+resultado_loop          LABEL     0088 136    .text
+STACK_SIZE              ABSOLUTE  0040 64     startup
+sysclk                  LABEL     00E4 228    .bss
+SYSCLK_ADDR             LABEL     00B0 176    .text
+SYSCLK_ADDR2            LABEL     0092 146    .text
+SYSCLK_FREQ             ABSOLUTE  000A 10     startup
+SYSCLK_FREQ2            ABSOLUTE  0001 1      startup
+tos                     LABEL     0126 294    .stack
+tos_addr                LABEL     0008 8      startup
+
+Code listing
+   1           	; Ficheiro:  4ºTrabalho.S
+   2           	; Descricao: Programa do 4º Trabalho.
+   3           	; Autor:     Mihail Arcus (nº50870) e Paulo Torres (nº50867) 
+   4           	; Data:      9-6-2023
+   5           	
+   6           	; Definicao dos valores dos simbolos utilizados no programa
+   7           	;
+   8          		.equ	CPSR_BIT_I, 0b010000          ; Mascara para o bit I do registo CPSR
+   9           	
+  10          		.equ	STACK_SIZE, 64                ; Dimensao do stack - 64 B
+  11           	
+  12           		; Definicoes do porto de entrada
+  13          		.equ	INPORT_ADDRESS, 0xFF80        ; Endereco do porto de entrada FF80
+  14           	
+  15           		; Definicoes do porto de saida
+  16          		.equ	OUTPORT_ADDRESS, 0xFFC0       ; Endereco do porto de saida FFC0
+  17           	
+  18          		.equ	OUTPORT_INIT_VAL, 0           ; Valor inicial do porto de saida
+  19           	
+  20           		; Definicoes do circuito pTC
+  21           	
+  22          		.equ	PTC_ADDRESS,  0xFF00         ; Endereco do circuito pTC FF00
+  23           	
+  24           	
+  25          		.equ	PTC_TCR, 0                    ; Deslocamento do registo TCR do pTC
+  26          		.equ	PTC_TMR, 2                    ; Deslocamento do registo TMR do pTC
+  27          		.equ	PTC_TC,  4                    ; Deslocamento do registo TC do pTC
+  28          		.equ	PTC_TIR, 6                    ; Deslocamento do registo TIR do pTC
+  29           	
+  30          		.equ	PTC_CMD_START, 0              ; Comando para iniciar a contagem no pTC
+  31          		.equ	PTC_CMD_STOP, 1               ; Comando para parar a contagem no pTC
+  32           	
+  33           		;Definições das frequencias do temporizador
+  34          		.equ	SYSCLK_FREQ, 0x000A   ;Lê a cada segundo    
+  35          		.equ	SYSCLK_FREQ2, 0x0001	;Lê a cada 0,1 segundos
+  36           	
+  37           	
+  38           		.section startup
+  39           	
+  40 0000 01 58		b	_start
+  41 0002 4F 0C		ldr	pc, isr_addr
+  42           	_start:
+  43 0004 1D 0C		ldr	sp, tos_addr
+  44 0006 1F 0C		ldr	pc, main_addr
+  45           	
+  46           	tos_addr:
+  47 0008 26 01		.word	tos
+  48           	main_addr:
+  49 000A 0E 00		.word	main
+  50           	isr_addr:
+  51 000C 94 00		.word	isr
+  52           	
+  53           		.text
+  54           	
+  55           	;R3 - variavel auxiliar
+  56           	;R4 - variavel auxiliar
+  57           	;R5 - guarda o tempo que o utilizador definiu
+  58           	
+  59           	main:
+  60 000E 05 24		push r5
+  61           	main_loop:
+  62           	;bits todos a 1
+  63 0010 F0 6F	    mov r0, #0xFF
+  64 0012 53 5C	    bl outport_write
+  65           	;User 1 ou 0
+  66 0014 4E 5C		bl inport_read
+  67 0016 11 60	    mov r1, #1
+  68 0018 12 C0	    and r2, r1, r0
+  69 001A A0 B8	    cmp r2, r1
+  70 001C F9 47	    bne main_loop
+  71           	;Inicialização
+  72 001E 03 60		mov r3, #0
+  73 0020 81 0F		ldr r1, SYSCLK_ADDR2
+  74 0022 13 20		str r3, [r1,#0]
+  75 0024 10 60	    mov r0, #1
+  76 0026 49 5C	    bl outport_write
+  77 0028 A0 60	    mov	r0, #SYSCLK_FREQ
+  78 002A 53 5C		bl	ptc_init
+  79 002C 60 B0		mrs	r0, cpsr
+  80 002E 01 61		mov	r1, #CPSR_BIT_I
+  81 0030 80 C8		orr	r0, r0, r1
+  82 0032 40 B0		msr	cpsr, r0
+  83 0034 03 60		mov r3, #0
+  84 0036 C1 0F		ldr r1, SYSCLK_ADDR
+  85 0038 13 20		str r3, [r1,#0]
+  86           	main_loop2:
+  87           	
+  88           	;Ler user 1 ou 0
+  89 003A 3B 5C	    bl inport_read
+  90 003C 11 60	    mov r1, #1
+  91 003E 12 C0	    and r2, r1, r0
+  92 0040 A0 B8	    cmp r2, r1
+  93 0042 E5 47	    bne main
+  94           	
+  95           	;Ler timer
+  96 0044 36 5C		bl inport_read
+  97 0046 00 EA		lsr r0, r0, #4
+  98 0048 05 B0		mov r5, r0
+  99           	
+ 100           	;Ler variavel global/contador
+ 101 004A 21 0F		ldr r1, SYSCLK_ADDR
+ 102 004C 13 08		ldrb r3, [r1,#0]
+ 103           	
+ 104           	;Compara variavel global com timer
+ 105 004E B0 BA		cmp r3, r5
+ 106 0050 F4 4B		Blo main_loop2
+ 107           	
+ 108           	;Inicializar o contador
+ 109 0052 04 24		push r4
+ 110 0054 03 60	    mov r3, #0
+ 111 0056 14 60		mov r4, #1
+ 112           	
+ 113           	;Contador a 0
+ 114 0058 B1 0E		ldr r1, SYSCLK_ADDR
+ 115 005A 13 28		strb r3, [r1,#0]
+ 116           	
+ 117 005C 36 5C		bl ptc_stop
+ 118 005E 10 60		mov r0, #SYSCLK_FREQ2
+ 119 0060 38 5C		bl ptc_init
+ 120           	
+ 121           	;Estimulo a 0
+ 122 0062 00 60		mov r0, #0
+ 123 0064 2A 5C		bl outport_write
+ 124           	
+ 125 0066 15 60		mov r5, #1
+ 126           		
+ 127           	loop:
+ 128           	;Fica em loop enquanto user for 1
+ 129 0068 24 5C	    bl inport_read
+ 130 006A 45 C0	    and r5 , r4, r0
+ 131 006C 50 BA	    cmp r5, r4
+ 132 006E FC 43	    beq loop
+ 133           	;Vai buscar o valor do contador e apresenta o tempo do estimulo a 0,1 segundos
+ 134 0070 F1 0D		ldr r1, SYSCLK_ADDR
+ 135 0072 10 08		ldrb r0, [r1, #0]
+ 136 0074 80 E0		lsl r0, r0, #1
+ 137 0076 21 5C	    bl outport_write
+ 138 0078 04 04		pop r4
+ 139 007A 05 04		pop r5
+ 140           	;Reniciar o temporizador a cada segundo
+ 141 007C 26 5C		bl ptc_stop
+ 142 007E A0 60		mov r0, #SYSCLK_FREQ
+ 143 0080 28 5C		bl ptc_init
+ 144 0082 03 60		mov r3, #0
+ 145 0084 51 0D		ldr r1, SYSCLK_ADDR
+ 146 0086 13 28		strb r3, [r1,#0]
+ 147           	resultado_loop:
+ 148           	;Apresenta o resultado por 5 segundos
+ 149 0088 50 60		mov r0, #5
+ 150 008A 12 08		ldrb r2, [r1,#0]
+ 151 008C 20 B8		cmp r2, r0
+ 152 008E FC 4B	    blo resultado_loop
+ 153 0090 BE 5B		b main
+ 154           	
+ 155           	SYSCLK_ADDR2:
+ 156 0092 B0 00		.word SYSCLK_ADDR
+ 157           	
+ 158           	; Rotina:    isr
+ 159           	; Descricao: Incrementa o valor da variável global sysclk.
+ 160           	isr:
+ 161           	
+ 162 0094 00 24		push r0
+ 163 0096 01 24		push r1
+ 164 0098 02 24		push r2
+ 165           	
+ 166 009A A0 0C		ldr r0, SYSCLK_ADDR
+ 167 009C 01 00		ldr r1, [r0, #0]
+ 168 009E 91 A0		add r1, r1, #1
+ 169 00A0 01 20		str r1, [r0, #0]
+ 170           	
+ 171 00A2 02 60		mov r2, #0
+ 172 00A4 E0 0D		ldr r0, PTC_ADDR
+ 173 00A6 02 2B		strb r2, [r0, #PTC_TIR]
+ 174           	
+ 175 00A8 02 04		pop r2
+ 176 00AA 01 04		pop r1
+ 177 00AC 00 04		pop r0
+ 178 00AE 20 B0		movs pc, lr
+ 179           	
+ 180           	SYSCLK_ADDR:
+ 181 00B0 E4 00		.word	sysclk
+ 182           	
+ 183           	inport_read:
+ 184 00B2 21 0C		ldr	r1, inport_addr
+ 185 00B4 10 08		ldrb	r0, [r1, #0]
+ 186 00B6 0F B7		mov	pc, lr
+ 187           	
+ 188           	
+ 189           	inport_addr:
+ 190 00B8 80 FF		.word	INPORT_ADDRESS
+ 191           	
+ 192           	outport_write:
+ 193 00BA 21 0C		ldr	r1, outport_addr
+ 194 00BC 10 28		strb	r0, [r1, #0]
+ 195 00BE 0F B7		mov	pc, lr
+ 196           	
+ 197           	outport_addr:
+ 198 00C0 C0 FF		.word	OUTPORT_ADDRESS
+ 199           	
+ 200           	ptc_start:
+ 201 00C2 F0 0C		ldr	r0, PTC_ADDR
+ 202 00C4 01 60		mov	r1, #PTC_CMD_START
+ 203 00C6 01 28		strb	r1, [r0, #PTC_TCR]
+ 204 00C8 0F B7		mov	pc, lr
+ 205           	
+ 206           	ptc_stop:
+ 207 00CA B0 0C		ldr	r0, PTC_ADDR
+ 208 00CC 11 60		mov	r1, #PTC_CMD_STOP
+ 209 00CE 01 28		strb	r1, [r0, #PTC_TCR]
+ 210 00D0 0F B7		mov	pc, lr
+ 211           	
+ 212           	ptc_init:
+ 213           	
+ 214 00D2 0E 24		push lr
+ 215 00D4 00 24		push r0
+ 216           	
+ 217 00D6 F9 5F		bl ptc_stop
+ 218           	
+ 219 00D8 00 04		pop r0
+ 220 00DA 31 0C		ldr r1, PTC_ADDR
+ 221 00DC 10 29		strb r0,[r1, #PTC_TMR]
+ 222           	
+ 223 00DE F1 5F		bl ptc_start
+ 224 00E0 0F 04		pop pc
+ 225           	
+ 226           	PTC_ADDR:
+ 227 00E2 00 FF		.word	PTC_ADDRESS
+ 228           	
+ 229           	; Seccao:    bss
+ 230           	; Descricao: Guarda as variáveis globais sem valor inicial definido
+ 231           	;
+ 232           		.bss
+ 233           	
+ 234           	sysclk:
+ 235 00E4 00   		.space	2
+ 235 00E5 00
+ 236           	
+ 237           	; Seccao:    stack
+ 238           	; Descricao: Implementa a pilha com o tamanho definido pelo simbolo STACK_SIZE
+ 239           	;
+ 240           		.stack
+ 241 00E6 00   		.space	STACK_SIZE
+ 241 .... ..
+ 241 0125 00
+ 242           	tos:
