@@ -1,8 +1,3 @@
-; Ficheiro:  4ºTrabalho.S
-; Descricao: Programa do 4º Trabalho.
-; Autor:     Mihail Arcus (nº50870) e Paulo Torres (nº50867) 
-; Data:      9-6-2023
-
 ; Definicao dos valores dos simbolos utilizados no programa
 ;
 	.equ	CPSR_BIT_I, 0b010000          ; Mascara para o bit I do registo CPSR
